@@ -52,6 +52,7 @@ function createPDF() {
       pdfFile.setName(row[0] + "_" + row[2] + ".pdf");
       sheet.getRange(i+1, 11).setValue(pdfFile.getUrl());
       pdfIDs.push(row[0]);
+      
     } else if (pdfIDs.includes(row[0])) {
       // Jika file PDF untuk baris ini sudah ada, maka gunakan URL yang ada
       var existingPDF = folder.getFilesByName(row[0] + "_" + row[2] + ".pdf");
