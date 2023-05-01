@@ -1,0 +1,71 @@
+function createPDF() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("your_tableName");
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  var folder = DriveApp.getFolderById("folder_id");
+  var existingPDFs = folder.getFilesByType(MimeType.PDF);
+  
+  // Mengumpulkan daftar ID yang telah memiliki file PDF
+  var pdfIDs = [];
+  while (existingPDFs.hasNext()) {
+    var pdfFile = existingPDFs.next();
+    var pdfName = pdfFile.getName();
+    var id = pdfName.split("_")[0];
+    pdfIDs.push(id);
+  }
+  
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var action = row[9];
+    var pdfLink = row[10];
+    
+    if (action === "Create" && !pdfIDs.includes(row[0])) {
+      var newFolder = folder.createFolder(row[0] + "_" + row[2]);
+      var templateFile = DriveApp.getFileById("template_id");
+      var newFile = templateFile.makeCopy(newFolder);
+      var documentId = newFile.getId();
+      var document = DocumentApp.openById(documentId);
+      var body = document.getBody();
+      var amount = row[4].toLocaleString('id-ID', { style: 'currency', currency: 'IDR' });
+      body.replaceText("{{ID}}", row[0]);
+      body.replaceText("{{Tanggal}}", row[1]);
+      body.replaceText("{{Nama}}", row[2]);
+      body.replaceText("{{Email}}", row[3]);
+      body.replaceText("{{Jumlah}}", amount);
+      body.replaceText("{{Terbilang}}", row[5]);
+      body.replaceText("{{Catatan}}", row[6]);
+      body.replaceText("{{Panitia}}", row[7]);
+      
+      // Menambahkan QR Code ke dokumen PDF
+      var qrCodeUrl = row[8];
+      if (qrCodeUrl != "") {
+        var response = UrlFetchApp.fetch(qrCodeUrl);
+        var imageBlob = response.getBlob();
+        var qrCodeHeight = 150; // Tinggi gambar QR Code dalam piksel
+        var qrCodeWidth = 150; // Lebar gambar QR Code dalam piksel
+        body.appendImage(imageBlob).setWidth(qrCodeWidth).setHeight(qrCodeHeight);
+      }
+      document.saveAndClose();
+      var pdf = newFile.getAs(MimeType.PDF);
+      var pdfFile = folder.createFile(pdf);
+      pdfFile.setName(row[0] + "_" + row[2] + ".pdf");
+      sheet.getRange(i+1, 11).setValue(pdfFile.getUrl());
+      pdfIDs.push(row[0]);
+    } else if (pdfIDs.includes(row[0])) {
+      // Jika file PDF untuk baris ini sudah ada, maka gunakan URL yang ada
+      var existingPDF = folder.getFilesByName(row[0] + "_" + row[2] + ".pdf");
+      if (existingPDF.hasNext()) {
+        var pdfFile = existingPDF.next();
+        if (action !== "Create") {
+          // Jika "Create" dihapus dari kolom Action, hapus juga link di kolom Link PDF
+          sheet.getRange(i+1, 11).clearContent();
+          pdfFile.setTrashed(true);
+        } else if (pdfLink === "") {
+          // Jika link di kolom Link PDF kosong, perbarui dengan link yang baru
+          sheet.getRange(i+1, 11).setValue(pdfFile.getUrl());
+        }
+      }
+    }
+  }
+}
